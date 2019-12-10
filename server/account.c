@@ -15,7 +15,7 @@ int account_balance(char *user)
         int fd;
         ssize_t n;
 
-        snprintf(pathname, sizeof(pathname), "/etc/account/%s", user);
+        snprintf(pathname, sizeof(pathname), "account/%s", user);
 
         fd = open(pathname, O_RDONLY, 0);
 
@@ -55,7 +55,7 @@ int account_update(char *user, int delta)
         ssize_t n;
         int balance;
 
-        snprintf(pathname, sizeof(pathname), "/etc/account/%s", user);
+        snprintf(pathname, sizeof(pathname), "account/%s", user);
 
         fd = open(pathname, O_RDWR, 0);
 
@@ -115,20 +115,7 @@ int account_update(char *user, int delta)
 
 char *account_flag(void)
 {
-        static char buf[1024];
-        int fd;
-        ssize_t n;
-
-        fd = open("/home/blackjack/flag.txt", O_RDONLY, 0);
-
-        if (fd < 0)
-                return NULL;
-
-        memset(buf, 0, sizeof(buf));
-
-        n = readn(fd, buf, sizeof(buf) - 1);
-        if (close (fd) < 0 || n < 0)
-                return NULL;
+        static char buf[1024] = "Flag!";
 
         return buf;
 }
