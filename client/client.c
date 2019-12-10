@@ -7,6 +7,10 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
+int fd = -1;
+char buf[4096];
+int epoch;
+
 ssize_t readn(int fd, char *buffer, size_t count)
 {
         int offset, block;
@@ -86,14 +90,15 @@ int readline(int fd, char *buf, size_t maxlen)
         return 1;
 }
 
+void cmd_bet(int amount) {
+    nprintf(fd, "BET %d\n", amount);
+}
+
 int main(void)
 {
         char host[] = "127.0.0.1";
         int port = 5555;
-        int fd = -1;
         struct sockaddr_in sa;
-        char buf[4096];
-        int epoch;
 
         if (!inet_aton(host, &sa.sin_addr))
         {
