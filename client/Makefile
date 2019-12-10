@@ -1,10 +1,10 @@
 all: client
 
 .c.o:
-        gcc -Wall -c -o $@ $<
+	gcc -Wall -c -o $@ $<
 
 client: client.c client.o
-        gcc -Wall -o client client.c
+	gcc -Wall -o client client.c
 
 clean:
-        rm -f client *.o
+	rm -f client *.o

@@ -1,2 +1,7 @@
+client/client
+*.o
+.idea
+Cmake*
+cmake*
 .DS_Store
 *.out
