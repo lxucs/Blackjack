@@ -7,14 +7,30 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <time.h>
+
+#define DECK_SIZE 52
 
 int fd = -1;
 char buf[4096];
+static const char CARDS[] = "A23456789TJQK";
 
 char hand1, hand2, faceup;
 int hand_value, face_value, balance;
 int win = 0, lose = 0, push=0, game_state = 0;
 char last_result = 0;  // W: win; L: lose; P: push; B: bust
+
+typedef struct
+{
+    // remaining cards: cards[top..DECK_SIZE-1]
+    int top;
+    char cards[DECK_SIZE];
+} my_deck;
+
+void exit_error(char* str) {
+    printf("%s\n", str);
+    exit(EXIT_FAILURE);
+}
 
 ssize_t readn(int fd, char *buffer, size_t count)
 {
@@ -93,19 +109,6 @@ int readline(int fd, char *buf, size_t maxlen)
         }
 
         return 1;
-}
-
-typedef struct {
-    int bet;
-    char* hand_string;
-    int hand_value;
-    char dealer_faceup;
-    int dealer_value;
-} bet_response;
-
-void exit_error(char* str) {
-    printf("%s\n", str);
-    exit(EXIT_FAILURE);
 }
 
 void action_balance() {
@@ -220,29 +223,72 @@ void action_double() {
     last_result = buf[4];
 }
 
-void play_one_game(int epo) {
-    printf("----------------Game %d----------------\n", epo);
-    action_balance();
-    int balance_start = balance;
-
-    action_bet(1);
-    while(game_state == 1 && hand_value < 12)
-        action_hit();
-
-    if(game_state == 1)
-        action_stand();
-
+void play_games_dummy(int epoch) {
+    printf("Playing %d games...\n", epoch);
     action_balance();
 
-    printf("*** Result: %c\tWin: %d\t Lose: %d\t Push: %d\t Balance: %d -> %d\n", last_result, win, lose, push, balance_start, balance);
-}
-
-void play_games() {
-    int epoch = 50;
     for(int epo = 1; epo <= epoch; ++epo) {
-        play_one_game(epo);
+        printf("-----------------------Game %d-----------------------\n", epo);
+        int balance_start = balance;
+
+        action_bet(1);
+        while(game_state == 1 && hand_value < 12)
+            action_hit();
+
+        if(game_state == 1)
+            action_stand();
+
+        action_balance();
+
+        printf("*** Result: %c\tWin: %d\t Lose: %d\t Push: %d\t Balance: $%d -> $%d\n", last_result, win, lose, push, balance_start, balance);
+
         sleep(3);
     }
+}
+
+my_deck shuffle_new_deck() {
+    my_deck deck;
+    deck.top = 0;
+
+    for(int i = 0; i < 4; ++i)
+        for(int j = 0; j < 13; ++j) {
+            int k = i * 13 + j;
+            deck.cards[i * 13 + j] = CARDS[j];
+        }
+    for(int i = 1; i < 52; ++i) {
+        int r = rand() % i;
+        char tmp = deck.cards[i];
+        deck.cards[i] = deck.cards[r];
+        deck.cards[r] = tmp;
+    }
+}
+
+int verify_seed(unsigned int seed, char card1, char card2, char card3) {
+    srand(seed);
+    my_deck deck = shuffle_new_deck();
+
+    return deck.cards[0] == card1 && deck.cards[1] == card2 && deck.cards[2] == card3;
+}
+
+unsigned int crack_seed(pid_t pid, int minute_diff, char card1, char card2, char card3) {
+    time_t range_high = time(NULL);
+    time_t range_low = range_high - 60 * (minute_diff + 1) - 5;
+    for(time_t t = range_high; t >= range_low; --t) {
+        unsigned int seed = pid ^ t;
+        if(verify_seed(seed, card1, card2, card3)) {
+            printf("Find seed! %d\n", seed);
+            return seed;
+        }
+    }
+    printf("Didn't find seed in range [%d - %d]\n", range_low, range_high);
+    return 0;
+}
+
+void play_games_cheating(pid_t pid, int minute_diff, int stop_threshold) {
+    printf("Playing games by cheating... (until reaching $%d)\n", stop_threshold);
+    action_balance();
+
+
 }
 
 int main(void)
@@ -277,7 +323,7 @@ int main(void)
                 return 1;
         printf("buf = %s\n", buf);
 
-        play_games();
+        play_games_dummy(50);
 
         return 0;
 }
