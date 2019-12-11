@@ -11,7 +11,7 @@
 #include "account.h"
 
 time_t boot;
-int debug = 1;
+int debug = 0;
 
 #define MAXARGS 32
 
@@ -347,42 +347,41 @@ void command(struct game *game, int argc, char *argv[])
         c->fn(game, argc, argv);
 }
 
-int main(void)
+int main(int argc, char* argv[])
 {
         char *cp;
         pid_t pid;
-        int argc;
-        char *argv[MAXARGS];
         struct game game;
 
         boot = time(NULL);
         pid = getpid();
-
         unsigned int seed = boot ^ pid;
         srand(boot ^ pid);
 
-        game.user = "acidburn";
         game.state = STATE_IDLE;
+        if(argc == 1 || strlen(argv[1]) == 0 || strlen(argv[1]) > 20)
+            game.user = "default_user";
+        else {
+            game.user = argv[1];
+            for(int i = 0; game.user[i]; ++i)
+                game.user[i] = tolower(game.user[i]);
+        }
 
         if(debug)
-            nprintf("+OK Welcome to the Blackjack server! My pid: %ld; ts: %d; seed: %d\n", pid, boot, seed);
+            nprintf("+OK Hi %s, welcome to the Blackjack server! FYI, my pid: %ld; ts: %d; seed: %d\n",
+                    game.user, pid, boot, seed);
         else
-            nprintf("+OK Welcome to the Blackjack server!\n");
+            nprintf("+OK Hi %s, welcome to the Blackjack server!\n", game.user);
 
         char line[1024];
-
         while (1)
         {
                 if (!fgets(line, sizeof(line), stdin))
                         break;
-
                 if ((cp = strrchr(line, '\n')))
                         *cp = 0;
-
                 argc = split(line, argv, MAXARGS);
-
                 command(&game, argc, argv);
         }
-
         return 0;
 }

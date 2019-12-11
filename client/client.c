@@ -8,6 +8,8 @@
 #include "deck.h"
 #include "util.h"
 
+#define MAX_BET 50000
+
 typedef struct deck my_deck;
 typedef struct hand my_hand;
 
@@ -220,8 +222,8 @@ void check_security(char hand1_foreseen, char hand2_foreseen, char faceup_forese
 }
 
 int bet_big() {
-    int amount = balance / 5;
-    return amount > 50000? 50000 : amount;
+    int amount = balance / 4;
+    return amount > MAX_BET? MAX_BET : amount;
 }
 
 void play_games_cheating(int stop_threshold, int seed_search_range) {

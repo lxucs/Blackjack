@@ -8,114 +8,118 @@
 #include <fcntl.h>
 #include "fdutil.h"
 
-int account_balance(char *user)
-{
-        char pathname[1024];
-        char buf[1024];
-        int fd;
-        ssize_t n;
+#define ACCOUNT_DIR "accounts"
+#define NEW_USER_BALANCE "10000"
 
-        snprintf(pathname, sizeof(pathname), "account/%s", user);
+int account_balance(char *user) {
+    char pathname[1024];
+    char buf[1024];
+    int fd;
+    ssize_t n;
 
-        fd = open(pathname, O_RDONLY, 0);
+    snprintf(pathname, sizeof(pathname), "accounts/%s", user);
 
-        if (fd < 0)
-                return -1;
+    struct stat st;
+    if (stat(ACCOUNT_DIR, &st) == -1) {
+        mkdir(ACCOUNT_DIR, 0744);
+    }
 
-        if (flock(fd, LOCK_SH) < 0)
-        {
-                close(fd);
-                return -1;
-        }
+    // Create new user if needed
+    if (access(pathname, F_OK)) {
+        fd = creat(pathname, 0644);
+        write(fd, NEW_USER_BALANCE, sizeof(NEW_USER_BALANCE) - 1);
+        close(fd);
+    }
 
-        memset(buf, 0, sizeof(buf));
+    fd = open(pathname, O_RDONLY, 0);
 
-        n = readn(fd, buf, sizeof(buf) - 1);
+    if (fd < 0)
+        return -1;
 
-        if (n < 0)
-                return -1;
+    if (flock(fd, LOCK_SH) < 0) {
+        close(fd);
+        return -1;
+    }
 
-        if (flock(fd, LOCK_UN) < 0)
-        {
-                close(fd);
-                return -1;
-        }
+    memset(buf, 0, sizeof(buf));
 
-        if (close(fd) < 0)
-                return -1;
+    n = readn(fd, buf, sizeof(buf) - 1);
 
-        return atoi(buf);
+    if (n < 0)
+        return -1;
+
+    if (flock(fd, LOCK_UN) < 0) {
+        close(fd);
+        return -1;
+    }
+
+    if (close(fd) < 0)
+        return -1;
+
+    return atoi(buf);
 }
 
-int account_update(char *user, int delta)
-{
-        char pathname[1024];
-        char buf[1024];
-        int fd;
-        ssize_t n;
-        int balance;
+int account_update(char *user, int delta) {
+    char pathname[1024];
+    char buf[1024];
+    int fd;
+    ssize_t n;
+    int balance;
 
-        snprintf(pathname, sizeof(pathname), "account/%s", user);
+    snprintf(pathname, sizeof(pathname), "account/%s", user);
 
-        fd = open(pathname, O_RDWR, 0);
+    fd = open(pathname, O_RDWR, 0);
 
-        if (fd < 0)
-                return -1;
+    if (fd < 0)
+        return -1;
 
-        if (flock(fd, LOCK_EX) < 0)
-        {
-                close(fd);
-                return -1;
-        }
+    if (flock(fd, LOCK_EX) < 0) {
+        close(fd);
+        return -1;
+    }
 
-        memset(buf, 0, sizeof(buf));
+    memset(buf, 0, sizeof(buf));
 
-        n = readn(fd, buf, sizeof(buf) - 1);
+    n = readn(fd, buf, sizeof(buf) - 1);
 
-        if (n < 0)
-        {
-                close(fd);
-                return -1;
-        }
+    if (n < 0) {
+        close(fd);
+        return -1;
+    }
 
-        balance = atoi(buf);
-        balance = balance + delta;
+    balance = atoi(buf);
+    balance = balance + delta;
 
-        if (ftruncate(fd, 0) < 0)
-        {
-                close(fd);
-                return -1;
-        }
+    if (ftruncate(fd, 0) < 0) {
+        close(fd);
+        return -1;
+    }
 
-        if (lseek(fd, 0, SEEK_SET) < 0)
-        {
-                close(fd);
-                return -1;
-        }
+    if (lseek(fd, 0, SEEK_SET) < 0) {
+        close(fd);
+        return -1;
+    }
 
-        snprintf(buf, sizeof(buf), "%d\n", balance);
+    snprintf(buf, sizeof(buf), "%d\n", balance);
 
-        if (writen(fd, buf, strlen(buf)) < 0)
-        {
-                close(fd);
-                return -1;
-        }
+    if (writen(fd, buf, strlen(buf)) < 0) {
+        close(fd);
+        return -1;
+    }
 
-        if (flock(fd, LOCK_UN) < 0)
-        {
-                close(fd);
-                return -1;
-        }
+    if (flock(fd, LOCK_UN) < 0) {
+        close(fd);
+        return -1;
+    }
 
-        if (close(fd) < 0)
-                return -1;
+    if (close(fd) < 0)
+        return -1;
 
-        return 0;
+    return 0;
 }
 
-char *account_flag(void)
-{
-        static char buf[1024] = "Flag!";
+char *account_flag(void) {
+    static char buf[1024] = "Flag!";
 
-        return buf;
+    return buf;
 }

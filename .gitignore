@@ -1,3 +1,4 @@
+accounts
 server/blackjack
 client/client
 *.o
