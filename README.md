@@ -13,6 +13,7 @@ Our intelligent client can guess the card deck and play optimally. The server si
 Example:
 
 `tcpserver -c100 -DPHRv -t60 0 5555 ./blackjack` (create or use default user)
+
 `tcpserver -c100 -DPHRv -t60 0 5555 ./blackjack acidburn` (create or use acidburn)
 
 New user's balance is set to $10000.
