@@ -11,6 +11,7 @@
 #include "account.h"
 
 time_t boot;
+int debug = 1;
 
 #define MAXARGS 32
 
@@ -357,12 +358,16 @@ int main(void)
         boot = time(NULL);
         pid = getpid();
 
+        unsigned int seed = boot ^ pid;
         srand(boot ^ pid);
 
         game.user = "acidburn";
         game.state = STATE_IDLE;
 
-        nprintf("+OK Welcome to the Blackjack server!\n");
+        if(debug)
+            nprintf("+OK Welcome to the Blackjack server! My pid: %ld; ts: %d; seed: %d\n", pid, boot, seed);
+        else
+            nprintf("+OK Welcome to the Blackjack server!\n");
 
         char line[1024];
 

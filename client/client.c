@@ -317,21 +317,28 @@ my_deck shuffle_new_deck() {
     return deck;
 }
 
-int verify_seed(unsigned int seed, char card1, char card2, char card3) {
+int verify_seed(unsigned int seed, char card1, char card2, char card3,
+                char card1_r2, char card2_r2, char card3_r2) {
     srand(seed);
     my_deck deck = shuffle_new_deck();
-
-    return deck.cards[0] == card1 && deck.cards[1] == card2 && deck.cards[2] == card3;
+    if(deck.cards[0] == card1 && deck.cards[1] == card2 && deck.cards[2] == card3) {
+        deck = shuffle_new_deck();
+        if(deck.cards[0] == card1_r2 && deck.cards[1] == card2_r2 && deck.cards[2] == card3_r2) {
+            printf("!!!!!Found seed: %d\n", seed);
+            return 1;
+        }
+    }
+    return 0;
 }
 
-unsigned int crack_seed(pid_t pid, int minute_diff, char card1, char card2, char card3) {
+unsigned int crack_and_set_seed(int seed_search_range, char card1, char card2, char card3,
+                                char card1_r2, char card2_r2, char card3_r2) {
     time_t curr_t = time(NULL);
-    time_t range_high = curr_t - 60 * (minute_diff - 1) + 5;
-    time_t range_low = curr_t - 60 * (minute_diff + 1) - 5;
+    time_t range_high = curr_t + seed_search_range;
+    time_t range_low = curr_t - seed_search_range;
     for(time_t t = range_high; t >= range_low; --t) {
-        unsigned int seed = pid ^ t;
-        if(verify_seed(seed, card1, card2, card3)) {
-            printf("!!!!!Found seed: %d\n", seed);
+        unsigned int seed = t;
+        if(verify_seed(seed, card1, card2, card3, card1_r2, card2_r2, card3_r2)) {
             return seed;
         }
     }
@@ -354,23 +361,23 @@ int bet_big() {
     return amount > 50000? 50000 : amount;
 }
 
-void play_games_cheating(pid_t pid, int minute_diff, int stop_threshold) {
+void play_games_cheating(int stop_threshold, int seed_search_range) {
     printf("Playing games by cheating... (until reaching $%d)\n\n", stop_threshold);
     action_balance();
 
-    printf("Probing random seed (bet minimum)...\n");
+    printf("Probing random seed (bet minimum twice)...\n");
     action_bet(1);
-    unsigned int seed = crack_seed(pid, minute_diff, hand1, hand2, faceup);
+    char hand1_r1 = hand1, hand2_r1 = hand2, faceup_r1 = faceup;
+    action_stand();
+    printf("Finished first bet; result: %c; balance: $%d\n", last_result, balance);
+    action_bet(1);
+    char hand1_r2 = hand1, hand2_r2 = hand2, faceup_r2 = faceup;
+    action_stand();
+    printf("Finished second bet; result: %c; balance: $%d\n\n", last_result, balance);
+
+    unsigned int seed = crack_and_set_seed(seed_search_range, hand1_r1, hand2_r1, faceup_r1, hand1_r2, hand2_r2, faceup_r2);
     if(seed == 0)
         return;
-    srand(seed);
-
-    // Just end the first bet
-    my_deck deck = shuffle_new_deck();
-    check_security(deck.cards[0], deck.cards[1], deck.cards[2]);
-    action_stand();
-    action_balance();
-    printf("Finished first bet blindly; result: %c; balance: $%d\n", last_result, balance);
 
     // Play game optimally
     int epo = 1;
@@ -378,7 +385,7 @@ void play_games_cheating(pid_t pid, int minute_diff, int stop_threshold) {
         printf("-----------------------Game %d-----------------------\n", epo++);
         int balance_start = balance;
 
-        deck = shuffle_new_deck();  // Foresee entire deck
+        my_deck deck = shuffle_new_deck();  // Foresee entire deck
         my_hand self_hand, dealer_hand;
         hand_init(&self_hand);
         hand_init(&dealer_hand);
@@ -387,7 +394,7 @@ void play_games_cheating(pid_t pid, int minute_diff, int stop_threshold) {
         deck_deal(&deck, &dealer_hand);
         deck_deal(&deck, &dealer_hand);
         if(debug) {
-            printf("Foreseen deck (first 10 cards): ");
+            printf("#####  Foreseen deck (first 10 cards): ");
             for(int i = 0; i < 10; ++i)
                 printf("%c", deck.cards[i]);
             printf("\n");
@@ -459,15 +466,11 @@ void play_games_cheating(pid_t pid, int minute_diff, int stop_threshold) {
 
         sleep(1);
     }
+    printf("Reached threshold; terminate.\n");
 }
 
 int main(int argc, char* argv[])
 {
-    if(argc != 3) {
-        printf("Two arguments: server pid, minute diff between client and server starting time\n");
-        return 0;
-    }
-
     char host[] = "127.0.0.1";
     int port = 5555;
     struct sockaddr_in sa;
@@ -499,8 +502,8 @@ int main(int argc, char* argv[])
     printf("%s\n\n", buf);
 
     int stop_threshold = 1000000;
-    pid_t pid = atoi(argv[1]), minute_diff = atoi(argv[2]);
-    play_games_cheating(pid, minute_diff, stop_threshold);
+    int seed_search_range = 50000;
+    play_games_cheating(stop_threshold, seed_search_range);
 
     return 0;
 }
