@@ -331,7 +331,7 @@ unsigned int crack_seed(pid_t pid, int minute_diff, char card1, char card2, char
     for(time_t t = range_high; t >= range_low; --t) {
         unsigned int seed = pid ^ t;
         if(verify_seed(seed, card1, card2, card3)) {
-            printf("Found seed! %d\n", seed);
+            printf("!!!!!Found seed: %d\n", seed);
             return seed;
         }
     }
@@ -343,25 +343,34 @@ void check_security(char hand1_foreseen, char hand2_foreseen, char faceup_forese
     /* Should be called after action_bet() */
     if(hand1_foreseen == hand1 && hand2_foreseen == hand2 && faceup_foreseen == faceup)
         return;
-    else
-        exit_error("Error: foreseen values don't match actual card values!");
+    else {
+        printf("Error: foreseen values don't match actual card values: %c%c, %c\n", hand1, hand2, faceup);
+        exit(EXIT_FAILURE);
+    }
+}
+
+int bet_big() {
+    int amount = balance / 5;
+    return amount > 50000? 50000 : amount;
 }
 
 void play_games_cheating(pid_t pid, int minute_diff, int stop_threshold) {
-    printf("Playing games by cheating... (until reaching $%d)\n", stop_threshold);
+    printf("Playing games by cheating... (until reaching $%d)\n\n", stop_threshold);
     action_balance();
 
+    printf("Probing random seed (bet minimum)...\n");
     action_bet(1);
     unsigned int seed = crack_seed(pid, minute_diff, hand1, hand2, faceup);
     if(seed == 0)
         return;
     srand(seed);
 
-    // End first bet
+    // Just end the first bet
     my_deck deck = shuffle_new_deck();
+    check_security(deck.cards[0], deck.cards[1], deck.cards[2]);
     action_stand();
     action_balance();
-    printf("## Finished first bet blindly; result: %c; balance: $%d\n", last_result, balance);
+    printf("Finished first bet blindly; result: %c; balance: $%d\n", last_result, balance);
 
     // Play game optimally
     int epo = 1;
@@ -387,8 +396,8 @@ void play_games_cheating(pid_t pid, int minute_diff, int stop_threshold) {
         char won_this_game = 0;
         // If blackjack, we win
         if(get_hand_value(&self_hand) == 21) {
-            printf("## Analysis: we will win by blackjack, bet big!\n");
-            action_bet(50000 < balance? 50000 : balance);
+            printf("##### Analysis: we will win by blackjack, bet big!\n");
+            action_bet(bet_big());
             check_security(deck.cards[0], deck.cards[1], deck.cards[2]);
             action_stand();
             won_this_game = 1;
@@ -400,8 +409,8 @@ void play_games_cheating(pid_t pid, int minute_diff, int stop_threshold) {
             deck_deal(&deck_tmp, &self_hand_tmp);
             while(get_hand_value(&self_hand_tmp) <= 21 && !won_this_game) {
                 if(get_hand_value(&self_hand_tmp) > get_hand_value(&dealer_hand)) {
-                    printf("## Analysis: we can win by double, bet big!\n");
-                    action_bet(50000 < balance? 50000 : balance);
+                    printf("##### Analysis: we can win by double, bet big!\n");
+                    action_bet(bet_big());
                     check_security(deck.cards[0], deck.cards[1], deck.cards[2]);
                     for(int k = 0; k < self_hand_tmp.ncards - 3; ++k)
                         action_hit();
@@ -425,9 +434,9 @@ void play_games_cheating(pid_t pid, int minute_diff, int stop_threshold) {
                 while(get_hand_value(&dealer_hand_tmp) < 17)
                     deck_deal(&deck_tmp, &dealer_hand_tmp);
                 if(get_hand_value(&dealer_hand_tmp) > 21) {
-                    printf("## Analysis: we can win by busting dealer, bet big!\n");
+                    printf("##### Analysis: we can win by busting dealer, bet big!\n");
+                    action_bet(bet_big());
                     check_security(deck.cards[0], deck.cards[1], deck.cards[2]);
-                    action_bet(50000 < balance? 50000 : balance);
                     for(int i = 0; i < hit; ++i)
                         action_hit();
                     action_stand();
@@ -438,17 +447,17 @@ void play_games_cheating(pid_t pid, int minute_diff, int stop_threshold) {
         }
         // Otherwise, just bet minimum and stand directly
         if(!won_this_game) {
-            printf("## Analysis: hard to win this game; bet minimum..\n");
+            printf("##### Analysis: hard to win this game; bet minimum..\n");
             action_bet(1);
             action_stand();
         }
 
         if(game_state == 1)
-            exit_error("Game is supposed to over; sth went wrong...");
+            exit_error("Error: game is supposed to be over; sth went wrong...");
         action_balance();
         printf("*** Result: %c\tWin: %d\t Lose: %d\t Push: %d\t Balance: $%d -> $%d\n", last_result, win, lose, push, balance_start, balance);
 
-        sleep(3);
+        sleep(1);
     }
 }
 
