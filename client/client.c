@@ -8,8 +8,12 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <time.h>
+#include "deck.h"
 
 #define DECK_SIZE 52
+
+typedef struct deck my_deck;
+typedef struct hand my_hand;
 
 int fd = -1;
 char buf[4096];
@@ -20,16 +24,65 @@ int hand_value, face_value, balance;
 int win = 0, lose = 0, push=0, game_state = 0;
 char last_result = 0;  // W: win; L: lose; P: push; B: bust
 
-typedef struct
-{
-    // remaining cards: cards[top..DECK_SIZE-1]
-    int top;
-    char cards[DECK_SIZE];
-} my_deck;
+char debug = 1;
 
 void exit_error(char* str) {
     printf("%s\n", str);
     exit(EXIT_FAILURE);
+}
+
+int card_value(char c)
+{
+    switch (c)
+    {
+        case 'A':
+            return 1;
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+            return c - '0';
+        case 'T':
+        case 'J':
+        case 'Q':
+        case 'K':
+            return 10;
+    }
+
+    return 0;
+}
+
+int get_hand_value(struct hand *h)
+{
+    int i;
+    int aces = 0;
+    int sum = 0;
+
+    for (i = 0; i < h->ncards; i++)
+    {
+        if (h->cards[i] == 'A')
+            aces++;
+        else
+            sum += card_value(h->cards[i]);
+    }
+
+    if (aces == 0)
+        return sum;
+
+    /* Give 11 points for aces, unless it causes us to go bust, so treat those as 1 point */
+    while (aces && (sum + aces*11) > 21)
+    {
+        sum++;
+        aces--;
+    }
+
+    sum += 11 * aces;
+
+    return sum;
 }
 
 ssize_t readn(int fd, char *buffer, size_t count)
@@ -252,7 +305,6 @@ my_deck shuffle_new_deck() {
 
     for(int i = 0; i < 4; ++i)
         for(int j = 0; j < 13; ++j) {
-            int k = i * 13 + j;
             deck.cards[i * 13 + j] = CARDS[j];
         }
     for(int i = 1; i < 52; ++i) {
@@ -261,6 +313,8 @@ my_deck shuffle_new_deck() {
         deck.cards[i] = deck.cards[r];
         deck.cards[r] = tmp;
     }
+
+    return deck;
 }
 
 int verify_seed(unsigned int seed, char card1, char card2, char card3) {
@@ -271,59 +325,173 @@ int verify_seed(unsigned int seed, char card1, char card2, char card3) {
 }
 
 unsigned int crack_seed(pid_t pid, int minute_diff, char card1, char card2, char card3) {
-    time_t range_high = time(NULL);
-    time_t range_low = range_high - 60 * (minute_diff + 1) - 5;
+    time_t curr_t = time(NULL);
+    time_t range_high = curr_t - 60 * (minute_diff - 1) + 5;
+    time_t range_low = curr_t - 60 * (minute_diff + 1) - 5;
     for(time_t t = range_high; t >= range_low; --t) {
         unsigned int seed = pid ^ t;
         if(verify_seed(seed, card1, card2, card3)) {
-            printf("Find seed! %d\n", seed);
+            printf("Found seed! %d\n", seed);
             return seed;
         }
     }
-    printf("Didn't find seed in range [%d - %d]\n", range_low, range_high);
+    printf("Didn't find seed in range [%ld - %ld]\n", range_low, range_high);
     return 0;
+}
+
+void check_security(char hand1_foreseen, char hand2_foreseen, char faceup_foreseen) {
+    /* Should be called after action_bet() */
+    if(hand1_foreseen == hand1 && hand2_foreseen == hand2 && faceup_foreseen == faceup)
+        return;
+    else
+        exit_error("Error: foreseen values don't match actual card values!");
 }
 
 void play_games_cheating(pid_t pid, int minute_diff, int stop_threshold) {
     printf("Playing games by cheating... (until reaching $%d)\n", stop_threshold);
     action_balance();
 
+    action_bet(1);
+    unsigned int seed = crack_seed(pid, minute_diff, hand1, hand2, faceup);
+    if(seed == 0)
+        return;
+    srand(seed);
 
+    // End first bet
+    my_deck deck = shuffle_new_deck();
+    action_stand();
+    action_balance();
+    printf("## Finished first bet blindly; result: %c; balance: $%d\n", last_result, balance);
+
+    // Play game optimally
+    int epo = 1;
+    while(balance < stop_threshold) {
+        printf("-----------------------Game %d-----------------------\n", epo++);
+        int balance_start = balance;
+
+        deck = shuffle_new_deck();  // Foresee entire deck
+        my_hand self_hand, dealer_hand;
+        hand_init(&self_hand);
+        hand_init(&dealer_hand);
+        deck_deal(&deck, &self_hand);
+        deck_deal(&deck, &self_hand);
+        deck_deal(&deck, &dealer_hand);
+        deck_deal(&deck, &dealer_hand);
+        if(debug) {
+            printf("Foreseen deck (first 10 cards): ");
+            for(int i = 0; i < 10; ++i)
+                printf("%c", deck.cards[i]);
+            printf("\n");
+        }
+
+        char won_this_game = 0;
+        // If blackjack, we win
+        if(get_hand_value(&self_hand) == 21) {
+            printf("## Analysis: we will win by blackjack, bet big!\n");
+            action_bet(50000 < balance? 50000 : balance);
+            check_security(deck.cards[0], deck.cards[1], deck.cards[2]);
+            action_stand();
+            won_this_game = 1;
+        }
+        // Try if we can win by double (whenever we can win by larger point)
+        if(!won_this_game) {
+            my_deck deck_tmp = deck;
+            my_hand self_hand_tmp = self_hand;
+            deck_deal(&deck_tmp, &self_hand_tmp);
+            while(get_hand_value(&self_hand_tmp) <= 21 && !won_this_game) {
+                if(get_hand_value(&self_hand_tmp) > get_hand_value(&dealer_hand)) {
+                    printf("## Analysis: we can win by double, bet big!\n");
+                    action_bet(50000 < balance? 50000 : balance);
+                    check_security(deck.cards[0], deck.cards[1], deck.cards[2]);
+                    for(int k = 0; k < self_hand_tmp.ncards - 3; ++k)
+                        action_hit();
+                    action_double();
+                    won_this_game = 1;
+                    break;
+                }
+                deck_deal(&deck_tmp, &self_hand_tmp);
+            }
+        }
+        // If cannot win by larger point, try to let dealer bust
+        if(!won_this_game) {
+            for(int hit = 0; ; ++hit) {
+                my_deck deck_tmp = deck;
+                my_hand self_hand_tmp = self_hand;
+                my_hand dealer_hand_tmp = dealer_hand;
+                for(int k = 0; k < hit; ++k)
+                    deck_deal(&deck_tmp, &self_hand_tmp);
+                if(get_hand_value(&self_hand_tmp) > 21)
+                    break;
+                while(get_hand_value(&dealer_hand_tmp) < 17)
+                    deck_deal(&deck_tmp, &dealer_hand_tmp);
+                if(get_hand_value(&dealer_hand_tmp) > 21) {
+                    printf("## Analysis: we can win by busting dealer, bet big!\n");
+                    check_security(deck.cards[0], deck.cards[1], deck.cards[2]);
+                    action_bet(50000 < balance? 50000 : balance);
+                    for(int i = 0; i < hit; ++i)
+                        action_hit();
+                    action_stand();
+                    won_this_game = 1;
+                    break;
+                }
+            }
+        }
+        // Otherwise, just bet minimum and stand directly
+        if(!won_this_game) {
+            printf("## Analysis: hard to win this game; bet minimum..\n");
+            action_bet(1);
+            action_stand();
+        }
+
+        if(game_state == 1)
+            exit_error("Game is supposed to over; sth went wrong...");
+        action_balance();
+        printf("*** Result: %c\tWin: %d\t Lose: %d\t Push: %d\t Balance: $%d -> $%d\n", last_result, win, lose, push, balance_start, balance);
+
+        sleep(3);
+    }
 }
 
-int main(void)
+int main(int argc, char* argv[])
 {
-        char host[] = "127.0.0.1";
-        int port = 5555;
-        struct sockaddr_in sa;
-
-        if (!inet_aton(host, &sa.sin_addr))
-        {
-                perror("inet_aton");
-                return 1;
-        }
-
-        if ((fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
-        {
-                perror("socket");
-                return 1;
-        }
-
-        sa.sin_port = htons(port);
-        sa.sin_family = AF_INET;
-
-        if (connect(fd, (struct sockaddr *)&sa, sizeof(struct sockaddr_in)) < 0)
-        {
-                perror("inet_aton");
-                return 1;
-        }
-
-        /* "Welcome" message */
-        if (!readline(fd, buf, sizeof(buf)))
-                return 1;
-        printf("buf = %s\n", buf);
-
-        play_games_dummy(50);
-
+    if(argc != 3) {
+        printf("Two arguments: server pid, minute diff between client and server starting time\n");
         return 0;
+    }
+
+    char host[] = "127.0.0.1";
+    int port = 5555;
+    struct sockaddr_in sa;
+
+    if (!inet_aton(host, &sa.sin_addr))
+    {
+        perror("inet_aton");
+        return 1;
+    }
+
+    if ((fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+    {
+        perror("socket");
+        return 1;
+    }
+
+    sa.sin_port = htons(port);
+    sa.sin_family = AF_INET;
+
+    if (connect(fd, (struct sockaddr *)&sa, sizeof(struct sockaddr_in)) < 0)
+    {
+        perror("inet_aton");
+        return 1;
+    }
+
+    /* "Welcome" message */
+    if (!readline(fd, buf, sizeof(buf)))
+        return 1;
+    printf("%s\n\n", buf);
+
+    int stop_threshold = 1000000;
+    pid_t pid = atoi(argv[1]), minute_diff = atoi(argv[2]);
+    play_games_cheating(pid, minute_diff, stop_threshold);
+
+    return 0;
 }

@@ -1,10 +1,15 @@
+OBJS = client.o deck.o
+CFLAGS = -Wall -O2
+
 all: client
 
-.c.o:
-	gcc -Wall -c -o $@ $<
+client: $(OBJS)
+	$(CC) $(OBJS) -o client
 
-client: client.c client.o
-	gcc -Wall -o client client.c
+deck.o: deck.h
+
+.c.o:
+	$(CC) $(CFLAGS) -c $*.c
 
 clean:
 	rm -f client *.o
