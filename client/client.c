@@ -394,7 +394,7 @@ void play_games_cheating(int stop_threshold, int seed_search_range) {
         deck_deal(&deck, &dealer_hand);
         deck_deal(&deck, &dealer_hand);
         if(debug) {
-            printf("#####  Foreseen deck (first 10 cards): ");
+            printf("##### Foreseen deck (first 10 cards): ");
             for(int i = 0; i < 10; ++i)
                 printf("%c", deck.cards[i]);
             printf("\n");
