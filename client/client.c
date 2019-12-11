@@ -232,10 +232,12 @@ void play_games_cheating(int stop_threshold, int seed_search_range) {
     action_bet(1);
     char hand1_r1 = hand1, hand2_r1 = hand2, faceup_r1 = faceup;
     action_stand();
+    action_balance();
     printf("Finished first bet; result: %c; balance: $%d\n", last_result, balance);
     action_bet(1);
     char hand1_r2 = hand1, hand2_r2 = hand2, faceup_r2 = faceup;
     action_stand();
+    action_balance();
     printf("Finished second bet; result: %c; balance: $%d\n\n", last_result, balance);
 
     unsigned int seed = crack_and_set_seed(seed_search_range, hand1_r1, hand2_r1, faceup_r1, hand1_r2, hand2_r2, faceup_r2);
