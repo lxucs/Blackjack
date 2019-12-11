@@ -4,7 +4,7 @@ A fun lab exploiting randomness to bring down the house!
 
 Our intelligent client can guess the card deck and play optimally. The server side code is adapted from: [adversary.io](https://platform.adversary.io/missions/seccourse-random/blackjack)
 
-#### Start Server (under server directory):
+### Start Server (under server directory):
 
 `make`
 
@@ -18,7 +18,7 @@ Example:
 
 New user's balance is set to $10000.
 
-#### Play Manually:
+### Play Manually:
 
 `telnet localhost 5555`
 
@@ -33,7 +33,7 @@ Command example:
 * QUIT: quit the game
 
 
-#### Play Automatically (under client directory):
+### Play Automatically (under client directory):
 
 `make`
 
