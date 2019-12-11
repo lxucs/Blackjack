@@ -21,4 +21,4 @@ The server side code is from: [Adversary.io](https://platform.adversary.io/missi
 `./client`
 
 ##### Sample Running Log
-![sample](sample.png)
+![sample](sample_run.png)

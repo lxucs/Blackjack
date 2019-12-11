@@ -187,7 +187,7 @@ int verify_seed(unsigned int seed, char card1, char card2, char card3,
     if(deck.cards[0] == card1 && deck.cards[1] == card2 && deck.cards[2] == card3) {
         deck = shuffle_new_deck();
         if(deck.cards[0] == card1_r2 && deck.cards[1] == card2_r2 && deck.cards[2] == card3_r2) {
-            printf("!!!!!Found seed: %d\n", seed);
+            printf("!!!!!Found seed: %d\n\n", seed);
             return 1;
         }
     }
